@@ -103,6 +103,13 @@ uint16_t calculateCRC16(const uint8_t *data, uint16_t length)
     return crc;
 }
 
+/**
+ * @brief 比赛状态数据，固定以1Hz频率发送
+ * @param game_type 比赛类型，`1`RoboMaster 机甲大师超级对抗赛，`2`RoboMaster 机甲大师高校单项赛，`3`ICRA RoboMaster 高校人工智能挑战赛，`4`RoboMaster 机甲大师高校联盟赛 3V3 对抗，'5'RoboMaster 机甲大师高校联盟赛步兵对抗
+ * @param game_progress 当前比赛阶段。`0`未开始比赛，`1`准备阶段，`2`十五秒裁判系统自检阶段，`3`五秒倒计时，`4`比赛中，`5`比赛结算中
+ * @param stage_remain_time 当前阶段剩余时间，单位：秒
+ * @param sync_time_stamp UNIX 时间，当机器人正确连接到裁判系统的 NTP 服务器后生效秒
+ */
 struct game_status_t
 {
     uint8_t game_type;
@@ -365,13 +372,13 @@ void receiveData(int fd)
                     {
                     case CMD_ID_GAME_STATUS:
                         game_status_t game_status;
-                        game_status.game_type = buffer[7];
-                        game_status.game_progress = buffer[8];
-                        game_status.stage_remain_time.raw_data[0] = buffer[9];
-                        game_status.stage_remain_time.raw_data[1] = buffer[10];
+                        game_status.game_type = (buffer[7] & 0x0F);
+                        game_status.game_progress = ((buffer[7] & 0xF0) >> 4);
+                        game_status.stage_remain_time.raw_data[0] = buffer[8];
+                        game_status.stage_remain_time.raw_data[1] = buffer[9];
                         for (int i = 0; i < 8; i++)
                         {
-                            game_status.sync_time_stamp.raw_data[i] = buffer[i + 11];
+                            game_status.sync_time_stamp.raw_data[i] = buffer[i + 10];
                         }
                         std::cout << "比赛类型: " << std::dec << (int)game_status.game_type << std::endl;
                         std::cout << "当前比赛阶段: " << (int)game_status.game_progress << std::endl;
