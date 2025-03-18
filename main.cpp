@@ -28,6 +28,7 @@
 #define CMD_ID_RADAR_INFO 0x020E
 #define CMD_ID_ROBOT_INTERACTION_DATA 0x0301
 
+// CRC8 校验表
 const uint8_t CRC8_Table[256] = {
     0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83, 0xc2, 0x9c, 0x7e, 0x20, 0xa3, 0xfd, 0x1f, 0x41,
     0x9d, 0xc3, 0x21, 0x7f, 0xfc, 0xa2, 0x40, 0x1e, 0x5f, 0x01, 0xe3, 0xbd, 0x3e, 0x60, 0x82, 0xdc,
@@ -104,25 +105,66 @@ uint16_t calculateCRC16(const uint8_t *data, uint16_t length)
 }
 
 /**
- * @brief 比赛状态数据，固定以1Hz频率发送
- * @param game_type 比赛类型，`1`RoboMaster 机甲大师超级对抗赛，`2`RoboMaster 机甲大师高校单项赛，`3`ICRA RoboMaster 高校人工智能挑战赛，`4`RoboMaster 机甲大师高校联盟赛 3V3 对抗，'5'RoboMaster 机甲大师高校联盟赛步兵对抗
- * @param game_progress 当前比赛阶段。`0`未开始比赛，`1`准备阶段，`2`十五秒裁判系统自检阶段，`3`五秒倒计时，`4`比赛中，`5`比赛结算中
- * @param stage_remain_time 当前阶段剩余时间，单位：秒
- * @param sync_time_stamp UNIX 时间，当机器人正确连接到裁判系统的 NTP 服务器后生效秒
+ * @brief 比赛状态数据，固定以 1Hz 频率发送
+ *
+ * 该结构体用于存储比赛的状态信息，包括比赛类型、当前阶段、剩余时间等。数据每秒更新一次
  */
 struct game_status_t
 {
+    /**
+     * @brief 比赛类型
+     *
+     * - `1` - RoboMaster 机甲大师超级对抗赛
+     *
+     * - `2` - RoboMaster 机甲大师高校单项赛
+     *
+     * - `3` - ICRA RoboMaster 高校人工智能挑战赛
+     *
+     * - `4` - RoboMaster 机甲大师高校联盟赛 3V3 对抗
+     *
+     * - `5` - RoboMaster 机甲大师高校联盟赛步兵对抗
+     */
     uint8_t game_type;
+
+    /**
+     * @brief 当前比赛阶段
+     *
+     * - `0` - 未开始比赛
+     *
+     * - `1` - 准备阶段
+     *
+     * - `2` - 十五秒裁判系统自检阶段
+     *
+     * - `3` - 五秒倒计时
+     *
+     * - `4` - 比赛中
+     *
+     * - `5` - 比赛结算中
+     */
     uint8_t game_progress;
+
+    /**
+     * @brief 当前阶段剩余时间（单位：秒）
+     *
+     * 该联合体用于存储剩余时间，提供 `raw_data` 和 `value` 两种访问方式
+     */
     union stage_remain_time_t
     {
-        uint8_t raw_data[2];
-        uint16_t value;
+        uint8_t raw_data[2]; // 以字节数组形式存储
+        uint16_t value;      // 以整数形式存储
     } stage_remain_time;
+
+    /**
+     * @brief UNIX 时间戳
+     *
+     * 机器人正确连接到裁判系统的 NTP 服务器后，该时间戳才会生效
+     *
+     * 该联合体提供 `raw_data` 和 `value` 两种访问方式
+     */
     union sync_time_stamp_t
     {
-        uint8_t raw_data[8];
-        uint16_t value;
+        uint8_t raw_data[8]; // 以字节数组形式存储
+        uint16_t value;      // 以整数形式存储
     } sync_time_stamp;
 };
 
@@ -222,15 +264,47 @@ union event_data_t
 };
 
 /**
- * @brief 裁判警告数据，己方判罚/判负时触发发送，其余时间以1Hz频率发送
- * @param level 己方最后一次受到判罚的等级, `1`双方黄牌，`2`黄牌，`3`红牌，`4`判负
- * @param offending_robot_id 己方最后一次受到判罚的违规机器人 ID。（如红1机器人ID为1，蓝1机器人ID为101）。判负和双方黄牌时，该值为0
- * @param count 己方最后一次受到判罚的违规机器人对应判罚等级的违规次数。（开局默认为0）
+ * @brief 裁判警告数据
+ *
+ * 该结构体用于存储裁判系统对己方的警告信息
+ *
+ * 在己方被判罚或判负时会立即发送，其他情况下以 1Hz 频率发送更新数据
  */
 struct referee_warning_t
 {
+    /**
+     * @brief 己方最后一次受到的判罚等级
+     *
+     * - `1` - 双方黄牌
+     *
+     * - `2` - 黄牌
+     *
+     * - `3` - 红牌
+     *
+     * - `4` - 判负
+     */
     uint8_t level;
+
+    /**
+     * @brief 己方最后一次受到判罚的违规机器人 ID
+     *
+     * 机器人 ID 规则：
+     *
+     * - 红方 1 号机器人 ID 为 `1`
+     *
+     * - 蓝方 1 号机器人 ID 为 `101`
+     *
+     * - 当判罚类型为 "判负" 或 "双方黄牌" 时，该值为 `0`
+     */
     uint8_t offending_robot_id;
+
+    /**
+     * @brief 违规机器人对应判罚等级的违规次数
+     *
+     * - 该值表示该机器人在本次比赛中因该判罚等级被警告的次数
+     *
+     * - 开局时默认为 `0`
+     */
     uint8_t count;
 };
 
@@ -289,7 +363,11 @@ struct robot_status_t
     } power_management_output;
 };
 
-// 串口初始化
+/**
+ * @brief 串口初始化
+ *
+ * @param port 端口名
+ */
 int initSerial(const char *port)
 {
     struct termios newstate;
